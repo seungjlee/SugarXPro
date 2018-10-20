@@ -35,6 +35,7 @@ namespace {
   constexpr int MoveHorizon   = 50;   // Plan time management at most this many moves ahead
   constexpr double MaxRatio   = 7.3;  // When in trouble, we can step over reserved time with this ratio
   constexpr double StealRatio = 0.34; // However we must not steal time from remaining moves over this ratio
+  double baseimportance   = DBL_MIN; //current (trivial) value
 
 
   // move_importance() is a skew-logistic function based on naive statistical
@@ -48,7 +49,7 @@ namespace {
     constexpr double XShift = 64.5;
     constexpr double Skew   = 0.171;
 
-    return pow((1 + exp((ply - XShift) / XScale)), -Skew) + DBL_MIN; // Ensure non-zero
+    return pow((1 + exp((ply - XShift) / XScale)), -Skew) + baseimportance; // Ensure non-zero
   }
 
   template<TimeType T>
@@ -83,10 +84,12 @@ namespace {
 
 void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
 
-  TimePoint minThinkingTime = MIN_THINK_TIME;
-  TimePoint moveOverhead    = MOVE_OVERHEAD;
-  TimePoint slowMover       = SLOW_MOVER;
-  TimePoint npmsec          = NODES_TIME;
+  TimePoint minThinkingTime = Options["Minimum Thinking Time"];
+  TimePoint moveOverhead    = Options["Move Overhead"];
+  TimePoint slowMover       = Options["Slow Mover"];
+  TimePoint npmsec          = Options["nodestime"];
+  baseimportance      = Options["Move Base Importance"]/1000. + DBL_MIN;
+
   TimePoint hypMyTime;
 
   // If we have to play in 'nodes as time' mode, then convert from time

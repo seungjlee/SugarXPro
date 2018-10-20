@@ -35,7 +35,21 @@
 #include "syzygy/tbprobe.h"
 #include "polybook.h"
 
+
+////#include <iostream>
+
 using std::string;
+
+Value PawnValueMg = _PawnValueMg;
+Value PawnValueEg = _PawnValueEg;
+Value KnightValueMg = _KnightValueMg;
+Value KnightValueEg = _KnightValueEg;
+Value BishopValueMg = _BishopValueMg;
+Value BishopValueEg = _BishopValueEg;
+Value RookValueMg = _RookValueMg;
+Value RookValueEg = _RookValueEg;
+Value QueenValueMg = _QueenValueMg;
+Value QueenValueEg = _QueenValueEg;
 
 UCI::OptionsMap Options; // Global object
 
@@ -43,6 +57,7 @@ namespace UCI {
 
 /// 'On change' actions, triggered by an option's value change
 void on_clear_hash(const Option&) { Search::clear(); }
+void on_search(const Option&) { Search::init(); }
 void on_hash_size(const Option& o) { TT.resize(o); }
 void on_large_pages(const Option& o) { TT.resize(o); }  // warning is ok, will be removed
 void on_logger(const Option& o) { start_logger(o); }
@@ -58,6 +73,49 @@ void LoadEpdToHash(const Option&) { TT.load_epd_to_hash(); }
 void on_book_file(const Option& o) { polybook.init(o); }
 void on_best_book_move(const Option& o) { polybook.set_best_book_move(o); }
 void on_book_depth(const Option& o) { polybook.set_book_depth(o); }
+
+inline Value rescale(int base, int incr, int scale) {
+  return Value(( 2 * base * (scale + incr) / scale + 1 ) / 2);
+}
+
+void on_value(const Option& ) {
+  int scaleMgValues = (int) Options["ScalePiecesMgValues"];
+  int scaleEgValues = (int) Options["ScalePiecesEgValues"];
+  ////std::cout << "scaleMgValues = " << scaleMgValues << std::endl;
+  ////std::cout << "scaleEgValues = " << scaleEgValues << std::endl;
+ 
+  PawnValueMg   = rescale( _PawnValueMg,   1*scaleMgValues, 10000 );
+  KnightValueMg = rescale( _KnightValueMg, 2*scaleMgValues, 10000 );
+  BishopValueMg = rescale( _BishopValueMg, 0*scaleMgValues, 10000 );
+  RookValueMg   = rescale( _RookValueMg,   2*scaleMgValues, 10000 );
+  QueenValueMg  = rescale( _QueenValueMg,  2*scaleMgValues, 10000 );
+  PawnValueEg   = rescale( _PawnValueEg,   0*scaleEgValues, 10000 );
+  KnightValueEg = rescale( _KnightValueEg, 1*scaleEgValues, 10000 );
+  BishopValueEg = rescale( _BishopValueEg, 2*scaleEgValues, 10000 );
+  RookValueEg   = rescale( _RookValueEg,   2*scaleEgValues, 10000 );
+  QueenValueEg  = rescale( _QueenValueEg,  1*scaleEgValues, 10000 );
+  ////std::cout << "PawnValueMg   = " << PawnValueMg   << std::endl;
+  ////std::cout << "KnightValueMg = " << KnightValueMg << std::endl;
+  ////std::cout << "BishopValueMg = " << BishopValueMg << std::endl;
+  ////std::cout << "RookValueMg   = " << RookValueMg   << std::endl;
+  ////std::cout << "QueenValueMg  = " << QueenValueMg  << std::endl;
+  ////std::cout << "PawnValueEg   = " << PawnValueEg   << std::endl;
+  ////std::cout << "KnightValueEg = " << KnightValueEg << std::endl;
+  ////std::cout << "BishopValueEg = " << BishopValueEg << std::endl;
+  ////std::cout << "RookValueEg   = " << RookValueEg   << std::endl;
+  ////std::cout << "QueenValueEg  = " << QueenValueEg  << std::endl;
+  
+  PieceValue[MG][PAWN]   = PawnValueMg;
+  PieceValue[MG][KNIGHT] = KnightValueMg;
+  PieceValue[MG][BISHOP] = BishopValueMg;
+  PieceValue[MG][ROOK]   = RookValueMg;
+  PieceValue[MG][QUEEN]  = QueenValueMg;
+  PieceValue[EG][PAWN]   = PawnValueEg;
+  PieceValue[EG][KNIGHT] = KnightValueEg;
+  PieceValue[EG][BISHOP] = BishopValueEg;
+  PieceValue[EG][ROOK]   = RookValueEg;
+  PieceValue[EG][QUEEN]  = QueenValueEg;
+}
 
 /// Our case insensitive less() function as required by UCI protocol
 bool CaseInsensitiveLess::operator() (const string& s1, const string& s2) const {
@@ -88,6 +146,11 @@ void init(OptionsMap& o) {
   o["Clear Hash"]            << Option(on_clear_hash);
   o["Ponder"]                << Option(false);
   o["MultiPV"]               << Option(1, 1, 500);
+  o["Skill Level"]           << Option(20, 0, 20);
+  o["Move Overhead"]         << Option(100, 0, 5000);
+  o["Minimum Thinking Time"] << Option(20, 0, 5000);
+  o["Slow Mover"]            << Option(84, 10, 1000);
+  o["nodestime"]             << Option(0, 0, 10000);
   o["UCI_Chess960"]          << Option(false);
   o["NeverClearHash"]        << Option(false);
   o["HashFile"]              << Option("hash.hsh", on_HashFile);
@@ -100,7 +163,15 @@ void init(OptionsMap& o) {
   o["NullMove"]              << Option(true);
   o["SyzygyPath"]            << Option("<empty>", on_tb_path);
   o["SyzygyProbeDepth"]      << Option(1, 1, 100);
+  o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
+  o["Move Base Importance"]  << Option(0, 0, 2000);
+  
+  o["CounterMoveHistory"]    << Option(64, 0, 256, on_search);
+  o["ScalePiecesMgValues"]   << Option(0, -3000, 10000, on_value);
+  o["ScalePiecesEgValues"]   << Option(0, -3000, 10000, on_value);
+
+  on_value(Option());
 }
 
 
