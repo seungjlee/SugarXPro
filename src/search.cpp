@@ -355,9 +355,9 @@ void Thread::search() {
   
   doNull = Options["NullMove"];
   
+  multiPV = std::min((size_t)Options["MultiPV"], rootMoves.size());
   if (tactical) multiPV = size_t(pow(2, tactical));
   zugzwangMates=0;
-  multiPV = std::min((size_t)Options["MultiPV"], rootMoves.size());
   
   int ct = int(Options["Contempt"]) * PawnValueEg / 100; // From centipawns
 
