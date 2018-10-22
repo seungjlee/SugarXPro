@@ -71,21 +71,6 @@ namespace {
   Value futility_margin(Depth d, bool improving) {
     return Value((175 - 50 * improving) * d / ONE_PLY);
   }
-  
-    int NMPdepth = 256;
-  Value NMPPawnValue = Value(200);
-  TUNE(NMPdepth, NMPPawnValue);
-  
-  int NullSearchDepth = 36;
-  Value NullSearchValue = Value(225);
-
-  TUNE(NullSearchDepth, NullSearchValue);
-  
-  int NullReductionValue = 823;
-  TUNE(NullReductionValue); 
-  
-  int NullReductionDepth = 67;
-  TUNE(NullReductionDepth);  
 
   // Futility and reductions lookup tables, initialized at startup
   int FutilityMoveCounts[2][16]; // [improving][depth]
@@ -822,7 +807,7 @@ namespace {
         && (ss-1)->currentMove != MOVE_NULL
         && (ss-1)->statScore < 23200
         &&  eval >= beta
-        &&  pureStaticEval >= beta - NullSearchDepth * depth / ONE_PLY + NullSearchValue
+        &&  pureStaticEval >= beta - 36 * depth / ONE_PLY + 225
         && !excludedMove
         &&  pos.non_pawn_material(us)
         && (ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor))
@@ -830,7 +815,7 @@ namespace {
         assert(eval - beta >= 0);
 
         // Null move dynamic reduction based on depth and value
-        Depth R = ((NullReductionValue + NullReductionDepth * depth / ONE_PLY) / NMPdepth + std::min((eval - beta) / NMPPawnValue, 3)) * ONE_PLY;
+        Depth R = ((823 + 67 * depth / ONE_PLY) / 256 + std::min(int(eval - beta) / 200, 3)) * ONE_PLY;
 
         ss->currentMove = MOVE_NULL;
         ss->continuationHistory = &thisThread->continuationHistory[NO_PIECE][0];
