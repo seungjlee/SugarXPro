@@ -20,7 +20,6 @@
 
 #include <cstring>   // For std::memset
 #include <iostream>
-#include <thread>
 #include <fstream>
 #include "uci.h"
 using std::string;
@@ -33,9 +32,6 @@ using std::string;
 #include "thread.h"
 #include "bitboard.h"
 #include "tt.h"
-#include "misc.h"
-#include "tt.h"
-#include "uci.h"
 
 #ifdef _WIN32
 
@@ -119,29 +115,6 @@ void Try_Get_LockMemory_Privileges()
 }
 #endif
 
-/// TTEntry::save saves a TTEntry
-void TTEntry::save(Key k, Value v, Bound b, Depth d, Move m, Value ev) {
-
-  assert(d / ONE_PLY * ONE_PLY == d);
-
-  // Preserve any existing move for the same position
-  if (m || (k >> 48) != key16)
-      move16 = (uint16_t)m;
-
-  // Overwrite less valuable entries
-  if (  (k >> 48) != key16
-      || d / ONE_PLY > depth8 - 4
-      || b == BOUND_EXACT)
-  {
-      key16     = (uint16_t)(k >> 48);
-      value16   = (int16_t)v;
-      eval16    = (int16_t)ev;
-      genBound8 = (uint8_t)(TT.generation8 | b);
-      depth8    = (int8_t)(d / ONE_PLY);
-  }
-}
-
-
 /// TranspositionTable::resize() sets the size of the transposition table,
 /// measured in megabytes. Transposition table consists of a power of 2 number
 /// of clusters and each cluster consists of ClusterSize number of TTEntry.
@@ -214,7 +187,7 @@ void TranspositionTable::resize(size_t mbSize) {
 
           use_large_pages = 0;
           memsize = clusterCount * sizeof(Cluster) + CacheLineSize - 1;
-          mem = malloc(memsize);
+          mem = calloc(memsize, 1);
           large_pages_used = false;
       }
       else
@@ -237,33 +210,13 @@ void TranspositionTable::resize(size_t mbSize) {
 }
 
 
-/// TranspositionTable::clear() initializes the entire transposition table to zero,
-//  in a multi-threaded way.
+/// TranspositionTable::clear() overwrites the entire transposition table
+/// with zeros. It is called whenever the table is resized, or when the
+/// user asks the program to clear the table (from the UCI interface).
 
 void TranspositionTable::clear() {
 
-  std::vector<std::thread> threads;
-
-  for (size_t idx = 0; idx < size_t(Options["Threads"]); idx++)
-  {
-      threads.push_back(std::thread([this, idx]() {
-
-          // Thread binding gives faster search on systems with a first-touch policy
-          if (int(Options["Threads"]) >= 8)
-              WinProcGroup::bindThisThread(idx);
-
-          // Each thread will zero its part of the hash table
-          const size_t stride = clusterCount / size_t(Options["Threads"]),
-                       start  = stride * idx,
-                       len    = idx != size_t(Options["Threads"]) - 1 ?
-                                stride : clusterCount - start;
-
-          std::memset(&table[start], 0, len * sizeof(Cluster));
-      }));
-  }
-
-  for (std::thread& th: threads)
-      th.join();
+  std::memset(table, 0, clusterCount * sizeof(Cluster));
 }
 
 void TranspositionTable::set_hash_file_name(const std::string& fname) { hashfilename = fname; }
@@ -597,7 +550,7 @@ void TranspositionTable::load_epd_to_hash() {
 			tte = TT.probe(pos.key(), ttHit);
 
 			tte->save(pos.key(), (Value)ce, BOUND_EXACT, (Depth)depth,
-				bm, VALUE_NONE);
+				bm, VALUE_NONE, TT.generation());
 		}
 		myfile.close();
 	}
@@ -618,7 +571,8 @@ TTEntry* TranspositionTable::probe(const Key key, bool& found) const {
   for (size_t i = 0; i < ClusterSize; ++i)
       if (!tte[i].key16 || tte[i].key16 == key16)
       {
-          tte[i].genBound8 = uint8_t(generation8 | tte[i].bound()); // Refresh
+          if ((tte[i].genBound8 & 0xFC) != generation8 && tte[i].key16)
+              tte[i].genBound8 += 4; // Refresh
 
           return found = (bool)tte[i].key16, &tte[i];
       }
@@ -653,3 +607,4 @@ int TranspositionTable::hashfull() const {
   }
   return cnt;
 }
+
