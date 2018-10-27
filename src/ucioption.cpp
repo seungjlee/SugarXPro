@@ -27,7 +27,6 @@
 #include <thread>
 
 #include "misc.h"
-#include "position.h"
 #include "search.h"
 #include "thread.h"
 #include "tt.h"
@@ -57,7 +56,6 @@ namespace UCI {
 
 /// 'On change' actions, triggered by an option's value change
 void on_clear_hash(const Option&) { Search::clear(); }
-void on_search(const Option&) { Search::init(); }
 void on_hash_size(const Option& o) { TT.resize(o); }
 void on_large_pages(const Option& o) { TT.resize(o); }  // warning is ok, will be removed
 void on_logger(const Option& o) { start_logger(o); }
@@ -143,7 +141,7 @@ void init(OptionsMap& o) {
   o["BookFile"]              << Option("Cerebellum_Light_Poly.bin", on_book_file);
   o["BestBookMove"]          << Option(true, on_best_book_move);
   o["BookDepth"]             << Option(255, 1, 255, on_book_depth);
-  o["Clear Hash"]            << Option(on_clear_hash);
+  o["Clear_Hash"]            << Option(on_clear_hash);
   o["Ponder"]                << Option(false);
   o["MultiPV"]               << Option(1, 1, 500);
   o["Skill Level"]           << Option(20, 0, 20);
@@ -160,6 +158,7 @@ void init(OptionsMap& o) {
   o["UCI_AnalyseMode"]       << Option(false);
   o["Large Pages"]           << Option(true, on_large_pages);
   o["ICCF Analyzes"]         << Option(0, 0,  8);
+  o["Clear Search"]          << Option(false);
   o["NullMove"]              << Option(true);
   o["SyzygyPath"]            << Option("<empty>", on_tb_path);
   o["SyzygyProbeDepth"]      << Option(1, 1, 100);
@@ -167,7 +166,6 @@ void init(OptionsMap& o) {
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
   o["Move Base Importance"]  << Option(5, 0, 2000);
   
-  o["CounterMoveHistory"]    << Option(64, 0, 256, on_search);
   o["ScalePiecesMgValues"]   << Option(5, -3000, 10000, on_value);
   o["ScalePiecesEgValues"]   << Option(10, -3000, 10000, on_value);
 
@@ -187,13 +185,11 @@ std::ostream& operator<<(std::ostream& os, const OptionsMap& om) {
               const Option& o = it.second;
               os << "\noption name " << it.first << " type " << o.type;
 
-              if (o.type == "string" || o.type == "check" || o.type == "combo")
+              if (o.type != "button")
                   os << " default " << o.defaultValue;
 
               if (o.type == "spin")
-                  os << " default " << int(stof(o.defaultValue))
-                     << " min "     << o.min
-                     << " max "     << o.max;
+                  os << " min " << o.min << " max " << o.max;
 
               break;
           }
@@ -213,15 +209,15 @@ Option::Option(bool v, OnChange f) : type("check"), min(0), max(0), on_change(f)
 Option::Option(OnChange f) : type("button"), min(0), max(0), on_change(f)
 {}
 
-Option::Option(double v, int minv, int maxv, OnChange f) : type("spin"), min(minv), max(maxv), on_change(f)
+Option::Option(int v, int minv, int maxv, OnChange f) : type("spin"), min(minv), max(maxv), on_change(f)
 { defaultValue = currentValue = std::to_string(v); }
 
 Option::Option(const char* v, const char* cur, OnChange f) : type("combo"), min(0), max(0), on_change(f)
 { defaultValue = v; currentValue = cur; }
 
-Option::operator double() const {
+Option::operator int() const {
   assert(type == "check" || type == "spin");
-  return (type == "spin" ? stof(currentValue) : currentValue == "true");
+  return (type == "spin" ? stoi(currentValue) : currentValue == "true");
 }
 
 Option::operator std::string() const {
@@ -229,7 +225,7 @@ Option::operator std::string() const {
   return currentValue;
 }
 
-bool Option::operator==(const char* s) const {
+bool Option::operator==(const char* s) {
   assert(type == "combo");
   return    !CaseInsensitiveLess()(currentValue, s)
          && !CaseInsensitiveLess()(s, currentValue);
@@ -257,7 +253,7 @@ Option& Option::operator=(const string& v) {
 
   if (   (type != "button" && v.empty())
       || (type == "check" && v != "true" && v != "false")
-      || (type == "spin" && (stof(v) < min || stof(v) > max)))
+      || (type == "spin" && (stoi(v) < min || stoi(v) > max)))
       return *this;
 
   if (type != "button")
@@ -270,4 +266,3 @@ Option& Option::operator=(const string& v) {
 }
 
 } // namespace UCI
-
