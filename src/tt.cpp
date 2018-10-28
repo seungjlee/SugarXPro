@@ -249,7 +249,7 @@ void TranspositionTable::clear() {
       threads.push_back(std::thread([this, idx]() {
 
           // Thread binding gives faster search on systems with a first-touch policy
-          if (int(Options["Threads"]) >= 8)
+          if (Options["Threads"] > 8)
               WinProcGroup::bindThisThread(idx);
 
           // Each thread will zero its part of the hash table
