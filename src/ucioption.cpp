@@ -159,10 +159,10 @@ void init(OptionsMap& o) {
   o["SyzygyProbeDepth"]      << Option(1, 1, 100);
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
-  o["Move Base Importance"]  << Option(5, 0, 2000);
+  o["Move Base Importance"]  << Option(0, 0, 2000);
   
-  o["ScalePiecesMgValues"]   << Option(5, -3000, 10000, on_value);
-  o["ScalePiecesEgValues"]   << Option(10, -3000, 10000, on_value);
+  o["ScalePiecesMgValues"]   << Option(0, -3000, 10000, on_value);
+  o["ScalePiecesEgValues"]   << Option(0, -3000, 10000, on_value);
 
   on_value(Option());
 }
