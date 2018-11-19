@@ -32,8 +32,6 @@
 #include "tt.h"
 #include "uci.h"
 #include "syzygy/tbprobe.h"
-#include "polybook.h"
-
 
 ////#include <iostream>
 
@@ -68,9 +66,6 @@ void LoadHashfromFile(const Option&) { TT.load(); }
 void LoadEpdToHash(const Option&) { TT.load_epd_to_hash(); }
 //end_Hash
 
-void on_book_file(const Option& o) { polybook.init(o); }
-void on_best_book_move(const Option& o) { polybook.set_best_book_move(o); }
-void on_book_depth(const Option& o) { polybook.set_book_depth(o); }
 
 inline Value rescale(int base, int incr, int scale) {
   return Value(( 2 * base * (scale + incr) / scale + 1 ) / 2);
@@ -134,13 +129,13 @@ void init(OptionsMap& o) {
   if (!n) n = 1;
   
   o["Debug Log File"]        << Option("", on_logger);
-  o["Contempt"]              << Option(21, -100, 100);
+  o["Book File"]             << Option("book.bin");
+  o["Best Book Move"]        << Option(false);
+  o["Contempt"]              << Option(24, -100, 100);
   o["Analysis_CT"]           << Option("Both var Off var White var Black var Both", "Both");
   o["Threads"]               << Option(n, unsigned(1), unsigned(512), on_threads);
   o["Hash"]                  << Option(16, 1, MaxHashMB, on_hash_size);
-  o["BookFile"]              << Option("Cerebellum_Light_Poly.bin", on_book_file);
-  o["BestBookMove"]          << Option(true, on_best_book_move);
-  o["BookDepth"]             << Option(255, 1, 255, on_book_depth);
+  o["OwnBook"]               << Option(false);
   o["Clear_Hash"]            << Option(on_clear_hash);
   o["Ponder"]                << Option(false);
   o["MultiPV"]               << Option(1, 1, 500);

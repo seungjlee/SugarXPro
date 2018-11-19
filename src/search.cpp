@@ -25,7 +25,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "polybook.h"
+#include "book.h"
 #include "evaluate.h"
 #include "misc.h"
 #include "movegen.h"
@@ -196,6 +196,7 @@ void Search::clear() {
   Time.availableNodes = 0;
   TT.clear();
   Threads.clear();
+  Tablebases::init(Options["SyzygyPath"]); // Free up mapped files
 }
 
 
@@ -211,6 +212,7 @@ void MainThread::search() {
       return;
   }
 
+  static PolyglotBook book; // Defined static to initialize the PRNG only once
   Color us = rootPos.side_to_move();
   Time.init(Limits, us, rootPos.game_ply());
 //Hash			  
@@ -233,26 +235,26 @@ void MainThread::search() {
   }
   else
   {
-      Move bookMove = MOVE_NONE;
-
-      if (!Limits.infinite && !Limits.mate)
-          bookMove = polybook.probe(rootPos);
-
-      if (bookMove && std::count(rootMoves.begin(), rootMoves.end(), bookMove))
+      if (Options["OwnBook"] && !Limits.infinite && !Limits.mate)
       {
-          for (Thread* th : Threads)
-              std::swap(th->rootMoves[0], *std::find(th->rootMoves.begin(), th->rootMoves.end(), bookMove));
-      }
-      else
-      {
-          for (Thread* th : Threads)
-              if (th != this)
-                  th->start_searching();
+          Move bookMove = book.probe(rootPos, Options["Book File"], Options["Best Book Move"]);
 
-          Thread::search(); // Let's start searching!
+          if (bookMove && std::count(rootMoves.begin(), rootMoves.end(), bookMove))
+          {
+              std::swap(rootMoves[0], *std::find(rootMoves.begin(), rootMoves.end(), bookMove));
+              goto finalize;
+          }
       }
+
+
+      for (Thread* th : Threads)
+          if (th != this)
+              th->start_searching();
+
+      Thread::search(); // Let's start searching!
   }
 
+finalize:
   // When we reach the maximum depth, we can arrive here without a raise of
   // Threads.stop. However, if we are pondering or in an infinite search,
   // the UCI protocol states that we shouldn't print the best move before the
@@ -982,7 +984,6 @@ moves_loop: // When in check, search starts from here
       // Extension for king moves that change castling rights
       if (   pos.can_castle(us)
           && type_of(movedPiece) == KING
-							   
           && depth < 12 * ONE_PLY)
           extension = ONE_PLY;
 
