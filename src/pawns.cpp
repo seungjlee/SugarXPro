@@ -2,7 +2,7 @@
   SugaR, a UCI chess playing engine derived from Stockfish
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
   Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-  Copyright (C) 2015-2018 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
   SugaR is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -26,15 +26,31 @@
 #include "position.h"
 #include "thread.h"
 
+#define PAWN_SCORES
+
 namespace {
 
   #define V Value
   #define S(mg, eg) make_score(mg, eg)
 
   // Pawn penalties
-  constexpr Score Backward = S( 9, 24);
-  constexpr Score Doubled  = S(11, 56);
-  constexpr Score Isolated = S( 5, 15);
+ constexpr Score Isolated = S( 5, 15);
+ constexpr Score Backward = S( 9, 24);
+ constexpr Score Doubled  = S(11, 56);
+
+  
+#ifdef PAWN_SCORES
+	//  Pawn Scores Isolated in Rank 3
+	constexpr Score PawnScoresIsolatedRank3 = S(- 5, + 0);
+
+	//  Pawn Scores Connected Passed
+	constexpr Score PawnScoresConnectedPassed = S(-16, +16);
+	constexpr Score KingSafetyCompensationPawnScoresConnectedPassed = S(- 5, + 0);
+	//	Protected Passed Pawn
+	constexpr Score ProtectedPassedPawn = S(+ 5, + 5);
+	constexpr Score RemotePassedPawn = S(+ 4, + 4);
+
+#endif
 
   // Connected pawn bonus by opposed, phalanx, #support and rank
   Score Connected[2][2][3][RANK_NB];
@@ -132,18 +148,170 @@ namespace {
             score += Connected[opposed][bool(phalanx)][popcount(supported)][relative_rank(Us, s)];
 
         else if (!neighbours)
-            score -= Isolated, e->weakUnopposed[Us] += !opposed;
+			{
+				score -= Isolated, e->weakUnopposed[Us] += !opposed;
 
-        else if (backward)
-            score -= Backward, e->weakUnopposed[Us] += !opposed;
+#ifdef PAWN_SCORES
+				if (relative_rank(Us, s) == RANK_3)
+				{
+					score += PawnScoresIsolatedRank3;
+				}
+#endif
+			}
 
-        if (doubled && !supported)
-            score -= Doubled;
-    }
+			else if (backward)
+				score -= Backward, e->weakUnopposed[Us] += !opposed;
+	 
 
-    return score;
-  }
+			if (doubled && !supported)
+				score -= Doubled;
 
+#ifdef PAWN_SCORES
+			bool protected_passed_pawn = false;
+
+			bool passed1 = bool(passed_pawn_mask(Us, s) & ourPawns);
+
+			//File fp1 = file_of(s);
+			Rank rp1 = rank_of(s);
+
+			File fp0 = f;
+			File fp2 = f;
+
+			if (fp0 > FILE_A)
+			{
+				fp0 = File(fp0 - 1);
+			}
+
+			if (f < FILE_H)
+			{
+				fp2 = File(fp2 + 1);
+			}
+
+			Rank rpp = rp1;
+
+			if (Us == WHITE)
+			{
+				if (rpp > RANK_2)
+				{
+					rpp = Rank(rpp - 1);
+				}
+			}
+			else
+			{
+				if (rpp < RANK_7)
+				{
+					rpp = Rank(rpp + 1);
+				}
+			}
+
+			if (rpp != rp1)
+			{
+				if (fp0 != f)
+				{
+					protected_passed_pawn = make_piece(Us, PAWN) == pos.piece_on(make_square(fp0, rpp));
+				}
+
+				if (fp2 != f)
+				{
+					protected_passed_pawn = protected_passed_pawn || (make_piece(Us, PAWN) == pos.piece_on(make_square(fp2, rpp)));
+				}
+
+				if (passed1 && protected_passed_pawn)
+				{
+					score += ProtectedPassedPawn;
+				}
+			}
+
+			if (passed1)
+			{
+				bool passed_in_flang = (f < FILE_C) || (f > FILE_F);
+
+				if (passed_in_flang)
+				{
+					score += RemotePassedPawn;
+				}
+			}
+#endif
+		}
+
+#ifdef PAWN_SCORES
+		const Square* pl_1 = pos.squares<PAWN>(Us);
+
+		// Loop through all pawns of the current color and score each pawn
+		while ((s = *pl_1++) != SQ_NONE)
+		{
+			assert(pos.piece_on(s) == make_piece(Us, PAWN));
+
+			File f = file_of(s);
+
+			File f0 = f;
+			File f2 = f;
+
+			if (f0 > FILE_A)
+			{
+				f0 = File(f0 - 1);
+			}
+
+			if (f < FILE_H)
+			{
+				f2 = File(f2 + 1);
+			}
+
+			bool passed1 = bool(passed_pawn_mask(Us, s) & ourPawns);
+
+			if (f0 != f)
+			{
+				bool passed0 = false;
+
+				if (passed1)
+				{
+					for (Rank r0 = RANK_2; r0 <= RANK_7; r0 = Rank(r0 + 1))
+					{
+						Square s0 = make_square(f0, r0);
+
+						if (pos.piece_on(s0) == make_piece(Us, PAWN))
+						{
+							passed0 = e->passedPawns[Us] & s0;
+
+							if (passed0)
+							{
+								break;
+							}
+						}
+					}
+
+					if (passed0 && passed1)
+					{
+						score += PawnScoresConnectedPassed;
+
+						Square UsKingSquare = SQ_A1;
+
+						Piece UsKing = make_piece(Us, KING);
+
+						while (pos.piece_on(UsKingSquare) != UsKing)
+						{
+							UsKingSquare = Square(UsKingSquare + 1);
+
+							assert(UsKingSquare != SQUARE_NB);
+						}
+
+						File UsKingFile = file_of(UsKingSquare);
+						//Rank UsKingRank = rank_of(UsKingSquare);
+
+						bool connected_passed_defend_king = (UsKingFile >= f0 && UsKingFile <= f2);
+
+						if (connected_passed_defend_king)
+						{
+							score += KingSafetyCompensationPawnScoresConnectedPassed;
+						}
+					}
+				}
+			}
+		}
+#endif
+
+		return score;
+	}
 } // namespace
 
 namespace Pawns {
@@ -221,7 +389,7 @@ Value Entry::evaluate_shelter(const Position& pos, Square ksq) {
 
       int d = std::min(f, ~f);
       safety += ShelterStrength[d][ourRank];
-      safety -= (ourRank && (ourRank == theirRank - 1)) ? 66 * (theirRank == RANK_3) 
+      safety -= (ourRank && (ourRank == theirRank - 1)) ? 66 * (theirRank == RANK_3)
                                                         : UnblockedStorm[d][theirRank];
   }
 

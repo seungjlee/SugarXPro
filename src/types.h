@@ -2,7 +2,7 @@
   SugaR, a UCI chess playing engine derived from Stockfish
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
   Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-  Copyright (C) 2015-2018 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
   SugaR is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -176,25 +176,14 @@ enum Value : int {
   VALUE_MATE_IN_MAX_PLY  =  VALUE_MATE - 2 * MAX_PLY,
   VALUE_MATED_IN_MAX_PLY = -VALUE_MATE + 2 * MAX_PLY,
 
-  _PawnValueMg   = 136,   _PawnValueEg   = 208,
-  _KnightValueMg = 782,   _KnightValueEg = 865,
-  _BishopValueMg = 830,   _BishopValueEg = 918,
-  _RookValueMg   = 1289,  _RookValueEg   = 1378,
-  _QueenValueMg  = 2529,  _QueenValueEg  = 2687,
+  PawnValueMg   = 136,   PawnValueEg   = 208,
+  KnightValueMg = 782,   KnightValueEg = 865,
+  BishopValueMg = 830,   BishopValueEg = 918,
+  RookValueMg   = 1289,  RookValueEg   = 1378,
+  QueenValueMg  = 2529,  QueenValueEg  = 2687,
 
   MidgameLimit  = 15258, EndgameLimit  = 3915
 };
-
-extern Value PawnValueMg;
-extern Value PawnValueEg;
-extern Value KnightValueMg;
-extern Value KnightValueEg;
-extern Value BishopValueMg;
-extern Value BishopValueEg;
-extern Value RookValueMg;
-extern Value RookValueEg;
-extern Value QueenValueMg;
-extern Value QueenValueEg;
 
 enum PieceType {
   NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING,
@@ -467,4 +456,3 @@ constexpr bool is_ok(Move m) {
 }
 
 #endif // #ifndef TYPES_H_INCLUDED
-

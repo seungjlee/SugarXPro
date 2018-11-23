@@ -2,7 +2,7 @@
   SugaR, a UCI chess playing engine derived from Stockfish
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
   Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-  Copyright (C) 2015-2018 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
   SugaR is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -35,25 +35,41 @@ namespace {
   constexpr int MoveHorizon   = 50;   // Plan time management at most this many moves ahead
   constexpr double MaxRatio   = 7.3;  // When in trouble, we can step over reserved time with this ratio
   constexpr double StealRatio = 0.34; // However we must not steal time from remaining moves over this ratio
-  double baseimportance   = DBL_MIN; //current (trivial) value
 
 
   // move_importance() is a skew-logistic function based on naive statistical
   // analysis of "how many games are still undecided after n half-moves". Game
   // is considered "undecided" as long as neither side has >275cp advantage.
   // Data was extracted from the CCRL game database with some simple filtering criteria.
-
   double move_importance(int ply) {
 
-    constexpr double XScale = 6.85;
-    constexpr double XShift = 64.5;
-    constexpr double Skew   = 0.171;
+	  constexpr double XScale = 6.85;
+	  constexpr double XShift = 64.5;
+	  constexpr double Skew = 0.171;
 
-    return pow((1 + exp((ply - XShift) / XScale)), -Skew) + baseimportance; // Ensure non-zero
+	  return pow((1 + exp((ply - XShift) / XScale)), -Skew) + DBL_MIN; // Ensure non-zero
+  }
+
+
+  // Time manager based on having matherial on board
+  double matherial_time_manager(Value Matherial) {
+
+	  const int time_credit_from_future_moves = 1.2;
+
+	// In Initial position is MIDDLE_GAME_PHASE
+	constexpr Value Initial_Matherial = 
+		2
+		*
+		(PawnValueMg * 8 + KnightValueMg * 2 + BishopValueMg * 2 + RookValueMg * 2 + QueenValueMg * 1)
+		*
+		time_credit_from_future_moves		//	This is time credit from future moves
+		;
+
+	return double(Matherial) / double(Initial_Matherial);
   }
 
   template<TimeType T>
-  TimePoint remaining(TimePoint myTime, int movesToGo, int ply, TimePoint slowMover) {
+  TimePoint remaining(TimePoint myTime, int movesToGo, int ply, TimePoint slowMover, const Position& pos) {
 
     constexpr double TMaxRatio   = (T == OptimumTime ? 1.0 : MaxRatio);
     constexpr double TStealRatio = (T == OptimumTime ? 0.0 : StealRatio);
@@ -67,7 +83,17 @@ namespace {
     double ratio1 = (TMaxRatio * moveImportance) / (TMaxRatio * moveImportance + otherMovesImportance);
     double ratio2 = (moveImportance + TStealRatio * otherMovesImportance) / (moveImportance + otherMovesImportance);
 
-    return TimePoint(myTime * std::min(ratio1, ratio2)); // Intel C++ asks for an explicit cast
+	double corrected_my_time = double(myTime) * std::min(ratio1, ratio2);
+
+	// Calculate corrected_my_time
+	Value Matherial = pos.non_pawn_material() + pos.pawn_material();
+
+	double matherial_time_manager_value = matherial_time_manager(Matherial);
+
+	corrected_my_time *= matherial_time_manager_value;
+	//
+
+    return TimePoint(corrected_my_time);
   }
 
 } // namespace
@@ -82,14 +108,12 @@ namespace {
 ///  inc >  0 && movestogo == 0 means: x basetime + z increment
 ///  inc >  0 && movestogo != 0 means: x moves in y minutes + z increment
 
-void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
+void TimeManagement::init(Search::LimitsType& limits, Color us, int ply, const Position& pos) {
 
   TimePoint minThinkingTime = Options["Minimum Thinking Time"];
   TimePoint moveOverhead    = Options["Move Overhead"];
   TimePoint slowMover       = Options["Slow Mover"];
   TimePoint npmsec          = Options["nodestime"];
-  baseimportance      = Options["Move Base Importance"]/1000. + DBL_MIN;
-
   TimePoint hypMyTime;
 
   // If we have to play in 'nodes as time' mode, then convert from time
@@ -124,8 +148,8 @@ void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
 
       hypMyTime = std::max(hypMyTime, TimePoint(0));
 
-      TimePoint t1 = minThinkingTime + remaining<OptimumTime>(hypMyTime, hypMTG, ply, slowMover);
-      TimePoint t2 = minThinkingTime + remaining<MaxTime    >(hypMyTime, hypMTG, ply, slowMover);
+      TimePoint t1 = minThinkingTime + remaining<OptimumTime>(hypMyTime, hypMTG, ply, slowMover, pos);
+      TimePoint t2 = minThinkingTime + remaining<MaxTime    >(hypMyTime, hypMTG, ply, slowMover, pos);
 
       optimumTime = std::min(t1, optimumTime);
       maximumTime = std::min(t2, maximumTime);

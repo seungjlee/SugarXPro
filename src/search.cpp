@@ -2,7 +2,7 @@
   SugaR, a UCI chess playing engine derived from Stockfish
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
   Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-  Copyright (C) 2015-2018 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
   SugaR is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -22,8 +22,10 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>   // For std::memset
+//#include <unistd.h> //for sleep
 #include <iostream>
 #include <sstream>
+#include <random>
 
 #include "book.h"
 #include "evaluate.h"
@@ -37,6 +39,15 @@
 #include "tt.h"
 #include "uci.h"
 #include "syzygy/tbprobe.h"
+
+int Options_Junior_Depth;
+bool Options_Junior_Mobility;
+bool Options_Junior_King;
+bool Options_Junior_Threats;
+bool Options_Junior_Passed;
+bool Options_Junior_Space;
+bool Options_Junior_Initiative;
+bool Options_Dynamic_Strategy;
 
 namespace Search {
 
@@ -86,10 +97,10 @@ namespace {
     return d > 17 ? 0 : 29 * d * d + 138 * d - 134;
   }
 
-  // Add a small random component to draw evaluations to keep search dynamic 
+  // Add a small random component to draw evaluations to keep search dynamic
   // and to avoid 3fold-blindness.
   Value value_draw(Depth depth, Thread* thisThread) {
-    return depth < 4 ? VALUE_DRAW 
+    return depth < 4 ? VALUE_DRAW
                      : VALUE_DRAW + Value(2 * (thisThread->nodes.load(std::memory_order_relaxed) % 2) - 1);
   }
 
@@ -104,8 +115,10 @@ namespace {
     Move best = MOVE_NONE;
   };
   
-  bool cleanSearch, doNull;
-  int tactical;
+  bool doNull, doLMR, cleanSearch;
+  Depth maxLMR;
+
+  int tactical, variety;
 
   template <NodeType NT>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
@@ -214,7 +227,7 @@ void MainThread::search() {
 
   static PolyglotBook book; // Defined static to initialize the PRNG only once
   Color us = rootPos.side_to_move();
-  Time.init(Limits, us, rootPos.game_ply());
+  Time.init(Limits, us, rootPos.game_ply(), rootPos);
 //Hash			  
   if (!Limits.infinite)
   TT.new_search();
@@ -224,8 +237,20 @@ void MainThread::search() {
 
   // Read search options
   doNull = Options["NullMove"];
+  doLMR = Options["LMR"];
+  maxLMR = Options["MaxLMReduction"] * ONE_PLY;
   tactical = Options["ICCF Analyzes"];
+  variety = Options["Variety"];
   
+  Options_Junior_Depth = Options["Junior Depth"];
+  Options_Junior_Mobility = Options["Junior Mobility"];
+  Options_Junior_King = Options["Junior King"];
+  Options_Junior_Threats = Options["Junior Threats"];
+  Options_Junior_Passed = Options["Junior Passed"];
+  Options_Junior_Space = Options["Junior Space"];
+  Options_Junior_Initiative = Options["Junior Initiative"];
+  Options_Dynamic_Strategy = Options["Dynamic Strategy"];
+ 
   if (rootMoves.empty())
   {
       rootMoves.emplace_back(MOVE_NONE);
@@ -235,7 +260,7 @@ void MainThread::search() {
   }
   else
   {
-      if (Options["OwnBook"] && !Limits.infinite && !Limits.mate)
+      if (bool(Options["OwnBook"]) && !Limits.infinite && !Limits.mate)
       {
           Move bookMove = book.probe(rootPos, Options["Book File"], Options["Best Book Move"]);
 
@@ -245,8 +270,7 @@ void MainThread::search() {
               goto finalize;
           }
       }
-
-
+	  
       for (Thread* th : Threads)
           if (th != this)
               th->start_searching();
@@ -281,9 +305,9 @@ finalize:
 
   // Check if there are threads with a better score than main thread
   Thread* bestThread = this;
-  if (    Options["MultiPV"] == 1
+  if (    int(Options["MultiPV"]) == 1
       && !Limits.depth
-      && !Skill(Options["Skill Level"]).enabled()
+      && !Skill(int(Options["Skill Level"])).enabled()
       &&  rootMoves[0].pv[0] != MOVE_NONE)
   {
       std::map<Move, int> votes;
@@ -357,7 +381,9 @@ void Thread::search() {
       mainThread->bestMoveChanges = 0, failedLow = false;
 
   size_t multiPV = Options["MultiPV"];
-  Skill skill(Options["Skill Level"]);
+  int local_int = Options["Skill Level"];
+  Skill skill(local_int);
+
   if (tactical) multiPV = size_t(pow(2, tactical));
   
   // When playing with strength handicap enable MultiPV search that we will
@@ -383,6 +409,7 @@ void Thread::search() {
 
   // Iterative deepening loop until requested to stop or the target depth is reached
   while (   (rootDepth += ONE_PLY) < DEPTH_MAX
+	     && rootDepth <= Options_Junior_Depth
          && !Threads.stop
          && !(Limits.depth && mainThread && rootDepth / ONE_PLY > Limits.depth))
   {
@@ -635,7 +662,7 @@ namespace {
         if (   Threads.stop.load(std::memory_order_relaxed)
             || pos.is_draw(ss->ply)
             || ss->ply >= MAX_PLY)
-            return (ss->ply >= MAX_PLY && !inCheck) ? evaluate(pos) 
+            return (ss->ply >= MAX_PLY && !inCheck) ? evaluate(pos)
                                                     : value_draw(depth, pos.this_thread());
 
         // Step 3. Mate distance pruning. Even if we mate at the next move our score
@@ -719,6 +746,10 @@ namespace {
             TB::ProbeState err;
             TB::WDLScore wdl = Tablebases::probe_wdl(pos, &err);
 
+            // Force check of time on the next occasion
+            if (thisThread == Threads.main())
+                static_cast<MainThread*>(thisThread)->callsCnt = 0;
+
             if (err != TB::ProbeState::FAIL)
             {
                 thisThread->tbHits.fetch_add(1, std::memory_order_relaxed);
@@ -788,6 +819,59 @@ namespace {
 
         tte->save(posKey, VALUE_NONE, BOUND_NONE, DEPTH_NONE, MOVE_NONE, pureStaticEval);
     }
+
+	// Step 7a. Planing (Series of Null moves for side to move in principal variation)
+	if (
+		PvNode
+		&&
+		(ss - 1)->currentMove != MOVE_NULL
+		&&
+		(ss - 1)->statScore < 23200
+		&&
+		eval >= beta
+		&&
+		ss->staticEval >= beta - 36 * depth / ONE_PLY + 225
+		&&
+		!excludedMove
+		&&
+		pos.non_pawn_material(us)
+		&&
+		(ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor)
+		)
+	{
+		ss->currentMove = MOVE_NULL;
+		ss->continuationHistory = &thisThread->continuationHistory[NO_PIECE][0];
+
+		pos.do_null_move(st);
+
+		Value PlanValue = -search<NonPV>(pos, ss + 1, -beta, -beta + 1, Depth(depth/4), !cutNode);
+
+		pos.undo_null_move();
+
+		if (PlanValue >= beta)
+		{
+			// Do not return unproven mate scores
+			if (PlanValue >= VALUE_MATE_IN_MAX_PLY)
+				PlanValue = beta;
+
+			if (thisThread->nmpMinPly || (abs(beta) < VALUE_KNOWN_WIN && depth < 12 * ONE_PLY))
+				return PlanValue;
+
+			assert(!thisThread->nmpMinPly); // Recursive verification is not allowed
+
+											// Do verification search at high depths, with null move pruning disabled
+											// for us, until ply exceeds nmpMinPly.
+			thisThread->nmpMinPly = ss->ply + (depth) / 4;
+			thisThread->nmpColor = us;
+
+			Value v = search<NonPV>(pos, ss, beta - 1, beta, Depth(depth / 4), false);
+
+			thisThread->nmpMinPly = 0;
+
+			if (v >= beta)
+				return PlanValue;
+		}
+	}
 
     // Step 7. Razoring (~2 Elo)
     if (   depth < 2 * ONE_PLY
@@ -1047,7 +1131,8 @@ moves_loop: // When in check, search starts from here
 
       // Step 16. Reduced depth search (LMR). If the move fails high it will be
       // re-searched at full depth.
-      if (    depth >= 3 * ONE_PLY
+	  if (    doLMR
+          &&  depth >= 3 * ONE_PLY
           &&  moveCount > 1
           && (!captureOrPromotion || moveCountPruning))
       {
@@ -1094,7 +1179,10 @@ moves_loop: // When in check, search starts from here
               // Decrease/increase reduction for moves with a good/bad history (~30 Elo)
               r -= ss->statScore / 20000 * ONE_PLY;
           }
-
+		  
+		  // Set maximum reduction
+          r = std::min(r, maxLMR);
+		  
           Depth d = std::max(newDepth - std::max(r, DEPTH_ZERO), ONE_PLY);
 
           value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
@@ -1446,6 +1534,9 @@ moves_loop: // When in check, search starts from here
           }
        }
     }
+	
+    if (variety && (bestValue + (variety * PawnValueEg / 100) >= 0 ))
+	  bestValue += rand() % (variety + 1);
 
     // All legal moves have been searched. A special case: If we're in check
     // and no legal moves were found, it is checkmate.
@@ -1716,9 +1807,9 @@ bool RootMove::extract_ponder_from_tt(Position& pos) {
 void Tablebases::rank_root_moves(Position& pos, Search::RootMoves& rootMoves) {
 
     RootInTB = false;
-    UseRule50 = Options["Syzygy50MoveRule"];
-    ProbeDepth = Options["SyzygyProbeDepth"] * ONE_PLY;
-    Cardinality = Options["SyzygyProbeLimit"];
+    UseRule50 = bool(Options["Syzygy50MoveRule"]);
+    ProbeDepth = int(Options["SyzygyProbeDepth"]) * ONE_PLY;
+    Cardinality = int(Options["SyzygyProbeLimit"]);
     bool dtz_available = true;
 
     // Tables with fewer pieces than SyzygyProbeLimit are searched with

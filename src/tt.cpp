@@ -2,7 +2,7 @@
   SugaR, a UCI chess playing engine derived from Stockfish
   Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
   Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
-  Copyright (C) 2015-2017 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
   SugaR is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -219,7 +219,7 @@ void TranspositionTable::resize(size_t mbSize) {
       }
       else
       {
-          sync_cout << "info string LargePages " << (memsize >> 20) << " MB" << sync_endl;
+          sync_cout << "info string LargePages " << (memsize >> 20) << " MiB" << sync_endl;
           large_pages_used = true;
       }
         
@@ -229,11 +229,12 @@ void TranspositionTable::resize(size_t mbSize) {
   if (!mem)
   {
       std::cerr << "Failed to allocate " << mbSize
-                << "MB for transposition table." << std::endl;
+                << "MiB for transposition table." << std::endl;
       exit(EXIT_FAILURE);
   }
 
   table = (Cluster*)((uintptr_t(mem) + CacheLineSize - 1) & ~(CacheLineSize - 1));
+  clear();
 }
 
 
@@ -249,7 +250,7 @@ void TranspositionTable::clear() {
       threads.push_back(std::thread([this, idx]() {
 
           // Thread binding gives faster search on systems with a first-touch policy
-          if (Options["Threads"] > 8)
+          if (int(Options["Threads"]) >= 8)
               WinProcGroup::bindThisThread(idx);
 
           // Each thread will zero its part of the hash table
