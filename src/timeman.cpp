@@ -61,11 +61,12 @@ namespace {
 		2
 		*
 		(PawnValueMg * 8 + KnightValueMg * 2 + BishopValueMg * 2 + RookValueMg * 2 + QueenValueMg * 1)
-		*
-		time_credit_from_future_moves		//	This is time credit from future moves
-		;
+		; // 18920
 
-	return double(Matherial) / double(Initial_Matherial);
+	return (1.0 - 1.0 / (1.0 + double(Matherial) / double(Initial_Matherial)))
+		*
+		time_credit_from_future_moves		//	This is time credit from future moves;
+		;
   }
 
   template<TimeType T>
