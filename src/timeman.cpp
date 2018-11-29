@@ -63,12 +63,9 @@ namespace {
 		(PawnValueMg * 8 + KnightValueMg * 2 + BishopValueMg * 2 + RookValueMg * 2 + QueenValueMg * 1)
 		; // Exact Value is 18920
 
-	return (1.0 + time_credit_from_future_moves - 1.0 / (1.0 + double(Matherial) / double(Initial_Matherial)/10000.0) / 4);
+	return (1.0 + time_credit_from_future_moves - 1.0 / (1.0 + 2.0 * double(Matherial) / double(Initial_Matherial)) / 4);
 
-	//	time(material) = 1.12 - 1 / (material / 10000 + 1) / 4
-   
-																		  
-   
+	//	time(material) = 1.12 - 1 / (2 x material / Initial_Matherial + 1) / 4
   }
 
   template<TimeType T>
