@@ -115,8 +115,7 @@ namespace {
     Move best = MOVE_NONE;
   };
   
-  bool doNull, doLMR, cleanSearch;
-  Depth maxLMR;
+  bool doNull, cleanSearch;
 
   int tactical;
 
@@ -237,8 +236,6 @@ void MainThread::search() {
 
   // Read search options
   doNull = Options["NullMove"];
-  doLMR = Options["LMR"];
-  maxLMR = Options["MaxLMReduction"] * ONE_PLY;
   tactical = Options["ICCF Analyzes"];
   
   Options_Junior_Depth = 127
@@ -1130,8 +1127,7 @@ moves_loop: // When in check, search starts from here
 
       // Step 16. Reduced depth search (LMR). If the move fails high it will be
       // re-searched at full depth.
-	  if (    doLMR
-          &&  depth >= 3 * ONE_PLY
+      if (    depth >= 3 * ONE_PLY
           &&  moveCount > 1
           && (!captureOrPromotion || moveCountPruning))
       {
