@@ -238,13 +238,13 @@ void MainThread::search() {
   doNull = Options["NullMove"];
   tactical = Options["ICCF Analyzes"];
   
-  Options_Junior_Depth = 127
-  Options_Junior_Mobility = true
-  Options_Junior_King = true
-  Options_Junior_Threats = true
-  Options_Junior_Passed = true
-  Options_Junior_Space = true
-  Options_Junior_Initiative = true
+  Options_Junior_Depth = 127;
+  Options_Junior_Mobility = true;
+  Options_Junior_King = true;
+  Options_Junior_Threats = true;
+  Options_Junior_Passed = true;
+  Options_Junior_Space = true;
+  Options_Junior_Initiative = true;
   Options_Dynamic_Strategy = Options["Dynamic Strategy"];
  
   if (rootMoves.empty())
@@ -1174,10 +1174,7 @@ moves_loop: // When in check, search starts from here
               // Decrease/increase reduction for moves with a good/bad history (~30 Elo)
               r -= ss->statScore / 20000 * ONE_PLY;
           }
-		  
-		  // Set maximum reduction
-          r = std::min(r, maxLMR);
-		  
+
           Depth d = std::max(newDepth - std::max(r, DEPTH_ZERO), ONE_PLY);
 
           value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
