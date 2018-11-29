@@ -204,7 +204,10 @@ namespace {
   };
 
   //	Undeveloped Piece Penalty
-  constexpr Score UndevelopedPiecePenalty = S(-20,-10);
+  constexpr Score UndevelopedPiecePenalty = S(-30,-20);
+
+  //	Piece Moved Many Times In Debut Penalty Factor
+  constexpr Score MovedManyTimesInDebutPiecePenaltyFactor = S(- 0, -0);	//	To be researched
 
 #endif
   // Assorted bonuses and penalties

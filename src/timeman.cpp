@@ -54,19 +54,21 @@ namespace {
   // Time manager based on having matherial on board
   double matherial_time_manager(Value Matherial) {
 
-	  const int time_credit_from_future_moves = 1.2;
+	  const int time_credit_from_future_moves = 0.12;	// 12 percents from future
 
 	// In Initial position is MIDDLE_GAME_PHASE
 	constexpr Value Initial_Matherial = 
 		2
 		*
 		(PawnValueMg * 8 + KnightValueMg * 2 + BishopValueMg * 2 + RookValueMg * 2 + QueenValueMg * 1)
-		; // 18920
+		; // Exact Value is 18920
 
-	return (1.0 - 1.0 / (1.0 + double(Matherial) / double(Initial_Matherial)))
-		*
-		time_credit_from_future_moves		//	This is time credit from future moves;
-		;
+	return (1.0 + time_credit_from_future_moves - 1.0 / (1.0 + double(Matherial) / double(Initial_Matherial)/10000.0) / 4);
+
+	//	time(material) = 1.12 - 1 / (material / 10000 + 1) / 4
+   
+																		  
+   
   }
 
   template<TimeType T>
