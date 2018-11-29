@@ -89,7 +89,6 @@ void init(OptionsMap& o) {
   o["Slow Mover"]            << Option(84, 10, 1000);
   o["nodestime"]             << Option(0, 0, 10000);
   o["UCI_Chess960"]          << Option(false);
-  o["Dynamic Strategy"]		 << Option(true);
   o["NeverClearHash"]        << Option(false);
   o["HashFile"]              << Option("hash.hsh", on_HashFile);
   o["SaveHashtoFile"]        << Option(SaveHashtoFile);
@@ -101,6 +100,7 @@ void init(OptionsMap& o) {
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
   o["Large Pages"]           << Option(true, on_large_pages);
+  o["Dynamic Strategy"]      << Option(true);
   o["ICCF Analyzes"]         << Option(0, 0,  8);
   o["Clear Search"]          << Option(false);
   o["NullMove"]              << Option(true);
