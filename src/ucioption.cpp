@@ -113,7 +113,6 @@ void init(OptionsMap& o) {
   o["NullMove"]              << Option(true);
   o["LMR"]                   << Option(true);
   o["MaxLMReduction"]        << Option(10, 0, 20);
-  o["Variety"]               << Option (0, 0, 20);
 }
 
 

@@ -118,7 +118,7 @@ namespace {
   bool doNull, doLMR, cleanSearch;
   Depth maxLMR;
 
-  int tactical, variety;
+  int tactical;
 
   template <NodeType NT>
   Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
@@ -240,7 +240,6 @@ void MainThread::search() {
   doLMR = Options["LMR"];
   maxLMR = Options["MaxLMReduction"] * ONE_PLY;
   tactical = Options["ICCF Analyzes"];
-  variety = Options["Variety"];
   
   Options_Junior_Depth = Options["Junior Depth"];
   Options_Junior_Mobility = Options["Junior Mobility"];
@@ -1516,27 +1515,18 @@ moves_loop: // When in check, search starts from here
 
           if (value > alpha)
           {
+              bestMove = move;
+
               if (PvNode) // Update pv even in fail-high case
                   update_pv(ss->pv, move, (ss+1)->pv);
 
               if (PvNode && value < beta) // Update alpha here!
-              {
                   alpha = value;
-                  bestMove = move;
-              }
-              else // Fail high
-              {
-                  tte->save(posKey, value_to_tt(value, ss->ply), BOUND_LOWER,
-                            ttDepth, move, ss->staticEval);
-
-                  return value;
-              }
+              else
+                  break; // Fail high
           }
        }
     }
-	
-    if (variety && (bestValue + (variety * PawnValueEg / 100) >= 0 ))
-	  bestValue += rand() % (variety + 1);
 
     // All legal moves have been searched. A special case: If we're in check
     // and no legal moves were found, it is checkmate.
@@ -1544,7 +1534,8 @@ moves_loop: // When in check, search starts from here
         return mated_in(ss->ply); // Plies to mate from the root
 
     tte->save(posKey, value_to_tt(bestValue, ss->ply),
-              PvNode && bestValue > oldAlpha ? BOUND_EXACT : BOUND_UPPER,
+              bestValue >= beta ? BOUND_LOWER :
+              PvNode && bestValue > oldAlpha  ? BOUND_EXACT : BOUND_UPPER,
               ttDepth, bestMove, ss->staticEval);
 
     assert(bestValue > -VALUE_INFINITE && bestValue < VALUE_INFINITE);
