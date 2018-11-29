@@ -89,13 +89,6 @@ void init(OptionsMap& o) {
   o["Slow Mover"]            << Option(84, 10, 1000);
   o["nodestime"]             << Option(0, 0, 10000);
   o["UCI_Chess960"]          << Option(false);
-  o["Junior Depth"]			 << Option(MAX_PLY-1, 1, MAX_PLY-1);
-  o["Junior Mobility"]		 << Option(true);
-  o["Junior King"]			 << Option(true);
-  o["Junior Threats"]		 << Option(true);
-  o["Junior Passed"]		 << Option(true);
-  o["Junior Space"]			 << Option(true);
-  o["Junior Initiative"]	 << Option(true);
   o["Dynamic Strategy"]		 << Option(true);
   o["NeverClearHash"]        << Option(false);
   o["HashFile"]              << Option("hash.hsh", on_HashFile);

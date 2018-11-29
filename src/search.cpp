@@ -241,13 +241,13 @@ void MainThread::search() {
   maxLMR = Options["MaxLMReduction"] * ONE_PLY;
   tactical = Options["ICCF Analyzes"];
   
-  Options_Junior_Depth = Options["Junior Depth"];
-  Options_Junior_Mobility = Options["Junior Mobility"];
-  Options_Junior_King = Options["Junior King"];
-  Options_Junior_Threats = Options["Junior Threats"];
-  Options_Junior_Passed = Options["Junior Passed"];
-  Options_Junior_Space = Options["Junior Space"];
-  Options_Junior_Initiative = Options["Junior Initiative"];
+  Options_Junior_Depth = 127
+  Options_Junior_Mobility = true
+  Options_Junior_King = true
+  Options_Junior_Threats = true
+  Options_Junior_Passed = true
+  Options_Junior_Space = true
+  Options_Junior_Initiative = true
   Options_Dynamic_Strategy = Options["Dynamic Strategy"];
  
   if (rootMoves.empty())
