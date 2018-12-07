@@ -79,7 +79,7 @@ void init(OptionsMap& o) {
   o["Analysis_CT"]           << Option("Both var Off var White var Black var Both", "Both");
   o["Threads"]               << Option(n, unsigned(1), unsigned(512), on_threads);
   o["Hash"]                  << Option(16, 1, MaxHashMB, on_hash_size);
-  o["Clear_Hash"]            << Option(on_clear_hash);
+  o["Clear Hash"]            << Option(on_clear_hash);
   o["Ponder"]                << Option(false);
   o["OwnBook"]               << Option(false);
   o["MultiPV"]               << Option(1, 1, 500);
@@ -101,9 +101,6 @@ void init(OptionsMap& o) {
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
   o["Large Pages"]           << Option(true, on_large_pages);
   o["Dynamic Strategy"]      << Option(true);
-  o["ICCF Analyzes"]         << Option(0, 0,  8);
-  o["Clear Search"]          << Option(false);
-  o["NullMove"]              << Option(true);
 }
 
 
