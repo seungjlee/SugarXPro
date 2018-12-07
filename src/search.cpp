@@ -22,7 +22,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>   // For std::memset
-//#include <unistd.h> //for sleep
 #include <iostream>
 #include <sstream>
 #include <random>
