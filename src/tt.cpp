@@ -34,6 +34,7 @@ using std::string;
 #include "bitboard.h"
 #include "tt.h"
 #include "misc.h"
+#include "thread.h"
 #include "tt.h"
 #include "uci.h"
 
@@ -147,6 +148,8 @@ void TTEntry::save(Key k, Value v, Bound b, Depth d, Move m, Value ev) {
 /// of clusters and each cluster consists of ClusterSize number of TTEntry.
 
 void TranspositionTable::resize(size_t mbSize) {
+	
+  Threads.main()->wait_for_search_finished();
 
   if (mbSize == 0)
       mbSize = mbSize_last_used;
