@@ -83,7 +83,7 @@ namespace {
     constexpr Color     Them = (Us == WHITE ? BLACK : WHITE);
     constexpr Direction Up   = (Us == WHITE ? NORTH : SOUTH);
 
-    Bitboard b, neighbours, stoppers, doubled, support, phalanx;
+    Bitboard b, neighbours, stoppers, doubled, supported, phalanx;
     Bitboard lever, leverPush;
     Square s;
     bool opposed, backward;
@@ -118,7 +118,7 @@ namespace {
         doubled    = ourPawns   & (s - Up);
         neighbours = ourPawns   & adjacent_files_bb(f);
         phalanx    = neighbours & rank_bb(s);
-        support    = neighbours & rank_bb(s - Up);
+        supported  = neighbours & rank_bb(s - Up);
 
         // A pawn is backward when it is behind all pawns of the same color
         // on the adjacent files and cannot be safely advanced.
@@ -130,22 +130,22 @@ namespace {
         // which could become passed after one or two pawn pushes when are
         // not attacked more times than defended.
         if (   !(stoppers ^ lever ^ leverPush)
-            && popcount(support) >= popcount(lever) - 1
+            && popcount(supported) >= popcount(lever) - 1
             && popcount(phalanx)   >= popcount(leverPush))
             e->passedPawns[Us] |= s;
 
         else if (   stoppers == SquareBB[s + Up]
                  && relative_rank(Us, s) >= RANK_5)
         {
-            b = shift<Up>(support) & ~theirPawns;
+            b = shift<Up>(supported) & ~theirPawns;
             while (b)
                 if (!more_than_one(theirPawns & PawnAttacks[Us][pop_lsb(&b)]))
                     e->passedPawns[Us] |= s;
         }
 
         // Score this pawn
-        if (support | phalanx)
-            score += Connected[opposed][bool(phalanx)][popcount(support)][relative_rank(Us, s)];
+        if (supported | phalanx)
+            score += Connected[opposed][bool(phalanx)][popcount(supported)][relative_rank(Us, s)];
 
         else if (!neighbours)
 			{
@@ -163,7 +163,7 @@ namespace {
 				score -= Backward, e->weakUnopposed[Us] += !opposed;
 	 
 
-			if (doubled && !support)
+			if (doubled && !supported)
 				score -= Doubled;
 
 #ifdef PAWN_SCORES
@@ -382,10 +382,10 @@ Value Entry::evaluate_shelter(const Position& pos, Square ksq) {
   for (File f = File(center - 1); f <= File(center + 1); ++f)
   {
       b = ourPawns & file_bb(f);
-      Rank ourRank = b ? relative_rank(Us, backmost_sq(Us, b)) : RANK_1;
+      int ourRank = b ? relative_rank(Us, backmost_sq(Us, b)) : 0;
 
       b = theirPawns & file_bb(f);
-      Rank theirRank = b ? relative_rank(Us, frontmost_sq(Them, b)) : RANK_1;
+      int theirRank = b ? relative_rank(Us, frontmost_sq(Them, b)) : 0;
 
       int d = std::min(f, ~f);
       safety += ShelterStrength[d][ourRank];
@@ -405,7 +405,7 @@ Score Entry::do_king_safety(const Position& pos) {
 
   Square ksq = pos.square<KING>(Us);
   kingSquares[Us] = ksq;
-  castlingRights[Us] = pos.castling_rights(Us);
+  castlingRights[Us] = pos.can_castle(Us);
   int minKingPawnDistance = 0;
 
   Bitboard pawns = pos.pieces(Us, PAWN);
