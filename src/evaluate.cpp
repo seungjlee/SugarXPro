@@ -524,7 +524,7 @@ namespace {
     Score score = SCORE_ZERO;
 
     // Non-pawn enemies
-    nonPawnEnemies = pos.pieces(Them) & ~pos.pieces(Them, PAWN);
+    nonPawnEnemies = pos.pieces(Them) ^ pos.pieces(Them, PAWN);
 
     // Squares strongly protected by the enemy, either because they defend the
     // square with a pawn, or because they defend the square twice and we don't.
