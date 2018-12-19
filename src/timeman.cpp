@@ -41,35 +41,18 @@ namespace {
   // analysis of "how many games are still undecided after n half-moves". Game
   // is considered "undecided" as long as neither side has >275cp advantage.
   // Data was extracted from the CCRL game database with some simple filtering criteria.
+
   double move_importance(int ply) {
 
-	  constexpr double XScale = 6.85;
-	  constexpr double XShift = 64.5;
-	  constexpr double Skew = 0.171;
+    constexpr double XScale = 6.85;
+    constexpr double XShift = 64.5;
+    constexpr double Skew   = 0.171;
 
-	  return pow((1 + exp((ply - XShift) / XScale)), -Skew) + DBL_MIN; // Ensure non-zero
-  }
-
-
-  // Time manager based on having matherial on board
-  double matherial_time_manager(Value Matherial) {
-
-	  const int time_credit_from_future_moves = 0.12;	// 12 percents from future
-
-	// In Initial position is MIDDLE_GAME_PHASE
-	constexpr Value Initial_Matherial = 
-		2
-		*
-		(PawnValueMg * 8 + KnightValueMg * 2 + BishopValueMg * 2 + RookValueMg * 2 + QueenValueMg * 1)
-		; // Exact Value is 18920
-
-	return (1.0 + time_credit_from_future_moves - 1.0 / (1.0 + 2.0 * double(Matherial) / double(Initial_Matherial)) / 4);
-
-	//	time(material) = 1.12 - 1 / (2 x material / Initial_Matherial + 1) / 4
+    return pow((1 + exp((ply - XShift) / XScale)), -Skew) + DBL_MIN; // Ensure non-zero
   }
 
   template<TimeType T>
-  TimePoint remaining(TimePoint myTime, int movesToGo, int ply, TimePoint slowMover, const Position& pos) {
+  TimePoint remaining(TimePoint myTime, int movesToGo, int ply, TimePoint slowMover) {
 
     constexpr double TMaxRatio   = (T == OptimumTime ? 1.0 : MaxRatio);
     constexpr double TStealRatio = (T == OptimumTime ? 0.0 : StealRatio);
@@ -83,17 +66,7 @@ namespace {
     double ratio1 = (TMaxRatio * moveImportance) / (TMaxRatio * moveImportance + otherMovesImportance);
     double ratio2 = (moveImportance + TStealRatio * otherMovesImportance) / (moveImportance + otherMovesImportance);
 
-	double corrected_my_time = double(myTime) * std::min(ratio1, ratio2);
-
-	// Calculate corrected_my_time
-	Value Matherial = pos.non_pawn_material() + pos.pawn_material();
-
-	double matherial_time_manager_value = matherial_time_manager(Matherial);
-
-	corrected_my_time *= matherial_time_manager_value;
-	//
-
-    return TimePoint(corrected_my_time);
+    return TimePoint(myTime * std::min(ratio1, ratio2)); // Intel C++ asks for an explicit cast
   }
 
 } // namespace
@@ -108,7 +81,7 @@ namespace {
 ///  inc >  0 && movestogo == 0 means: x basetime + z increment
 ///  inc >  0 && movestogo != 0 means: x moves in y minutes + z increment
 
-void TimeManagement::init(Search::LimitsType& limits, Color us, int ply, const Position& pos) {
+void TimeManagement::init(Search::LimitsType& limits, Color us, int ply) {
 
   TimePoint minThinkingTime = Options["Minimum Thinking Time"];
   TimePoint moveOverhead    = Options["Move Overhead"];
@@ -148,8 +121,8 @@ void TimeManagement::init(Search::LimitsType& limits, Color us, int ply, const P
 
       hypMyTime = std::max(hypMyTime, TimePoint(0));
 
-      TimePoint t1 = minThinkingTime + remaining<OptimumTime>(hypMyTime, hypMTG, ply, slowMover, pos);
-      TimePoint t2 = minThinkingTime + remaining<MaxTime    >(hypMyTime, hypMTG, ply, slowMover, pos);
+      TimePoint t1 = minThinkingTime + remaining<OptimumTime>(hypMyTime, hypMTG, ply, slowMover);
+      TimePoint t2 = minThinkingTime + remaining<MaxTime    >(hypMyTime, hypMTG, ply, slowMover);
 
       optimumTime = std::min(t1, optimumTime);
       maximumTime = std::min(t2, maximumTime);

@@ -220,7 +220,7 @@ void MainThread::search() {
 
   static PolyglotBook book; // Defined static to initialize the PRNG only once
   Color us = rootPos.side_to_move();
-  Time.init(Limits, us, rootPos.game_ply(), rootPos);
+  Time.init(Limits, us, rootPos.game_ply());
 //Hash			  
   if (!Limits.infinite)
   TT.new_search();
@@ -802,59 +802,6 @@ namespace {
 
         tte->save(posKey, VALUE_NONE, BOUND_NONE, DEPTH_NONE, MOVE_NONE, pureStaticEval);
     }
-
-	// Step 7a. Planing (Series of Null moves for side to move in principal variation)
-	if (
-		PvNode
-		&&
-		(ss - 1)->currentMove != MOVE_NULL
-		&&
-		(ss - 1)->statScore < 23200
-		&&
-		eval >= beta
-		&&
-		ss->staticEval >= beta - 36 * depth / ONE_PLY + 225
-		&&
-		!excludedMove
-		&&
-		pos.non_pawn_material(us)
-		&&
-		(ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor)
-		)
-	{
-		ss->currentMove = MOVE_NULL;
-		ss->continuationHistory = &thisThread->continuationHistory[NO_PIECE][0];
-
-		pos.do_null_move(st);
-
-		Value PlanValue = -search<NonPV>(pos, ss + 1, -beta, -beta + 1, Depth(depth/4), !cutNode);
-
-		pos.undo_null_move();
-
-		if (PlanValue >= beta)
-		{
-			// Do not return unproven mate scores
-			if (PlanValue >= VALUE_MATE_IN_MAX_PLY)
-				PlanValue = beta;
-
-			if (thisThread->nmpMinPly || (abs(beta) < VALUE_KNOWN_WIN && depth < 12 * ONE_PLY))
-				return PlanValue;
-
-			assert(!thisThread->nmpMinPly); // Recursive verification is not allowed
-
-											// Do verification search at high depths, with null move pruning disabled
-											// for us, until ply exceeds nmpMinPly.
-			thisThread->nmpMinPly = ss->ply + (depth) / 4;
-			thisThread->nmpColor = us;
-
-			Value v = search<NonPV>(pos, ss, beta - 1, beta, Depth(depth / 4), false);
-
-			thisThread->nmpMinPly = 0;
-
-			if (v >= beta)
-				return PlanValue;
-		}
-	}
 
     // Step 7. Razoring (~2 Elo)
     if (   !rootNode // The required rootNode PV handling is not available in qsearch
