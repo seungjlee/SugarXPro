@@ -217,7 +217,7 @@ public:
         fstat(fd, &statbuf);
         *mapping = statbuf.st_size;
         *baseAddress = mmap(nullptr, statbuf.st_size, PROT_READ, MAP_SHARED, fd, 0);
-		madvise(*baseAddress, statbuf.st_size, MADV_RANDOM);
+        madvise(*baseAddress, statbuf.st_size, MADV_RANDOM);
         ::close(fd);
 
         if (*baseAddress == MAP_FAILED) {
@@ -501,7 +501,7 @@ int decompress_pairs(PairsData* d, uint64_t idx) {
     //       I(k) = k * d->span + d->span / 2      (1)
 
     // First step is to get the 'k' of the I(k) nearest to our idx, using definition (1)
-    uint32_t k = uint32_t(idx / d->span);
+    uint32_t k = idx / d->span;
 
     // Then we read the corresponding SparseIndex[] entry
     uint32_t block = number<uint32_t, LittleEndian>(&d->sparseIndex[k].block);
@@ -547,7 +547,7 @@ int decompress_pairs(PairsData* d, uint64_t idx) {
         // All the symbols of a given length are consecutive integers (numerical
         // sequence property), so we can compute the offset of our symbol of
         // length len, stored at the beginning of buf64.
-        sym = uint16_t((buf64 - d->base64[len]) >> (64 - len - d->minSymLen));
+        sym = (buf64 - d->base64[len]) >> (64 - len - d->minSymLen);
 
         // Now add the value of the lowest symbol of length len to get our symbol
         sym += number<Sym, LittleEndian>(&d->lowestSym[len]);
@@ -953,7 +953,7 @@ uint8_t* set_sizes(PairsData* d, uint8_t* data) {
 
     // groupLen[] is a zero-terminated list of group lengths, the last groupIdx[]
     // element stores the biggest index that is the tb size.
-    size_t tbSize = size_t(d->groupIdx[std::find(d->groupLen, d->groupLen + 7, 0) - d->groupLen]);
+    uint64_t tbSize = d->groupIdx[std::find(d->groupLen, d->groupLen + 7, 0) - d->groupLen];
 
     d->sizeofBlock = 1ULL << *data++;
     d->span = 1ULL << *data++;
@@ -1108,10 +1108,10 @@ void* mapped(TBTable<Type>& e, const Position& pos) {
 
     static Mutex mutex;
 
-    // Use 'aquire' to avoid a thread reads 'ready' == true while another is
-    // still working, this could happen due to compiler reordering.
+    // Use 'acquire' to avoid a thread reading 'ready' == true while
+    // another is still working. (compiler reordering may cause this).
     if (e.ready.load(std::memory_order_acquire))
-        return e.baseAddress; // Could be nullptr if file does not exsist
+        return e.baseAddress; // Could be nullptr if file does not exist
 
     std::unique_lock<Mutex> lk(mutex);
 

@@ -97,8 +97,8 @@ public:
   template<PieceType Pt> Square square(Color c) const;
 
   // Castling
-  int can_castle(Color c) const;
-  int can_castle(CastlingRight cr) const;
+  int castling_rights(Color c) const;
+  bool can_castle(CastlingRight cr) const;
   bool castling_impeded(CastlingRight cr) const;
   Square castling_rook_square(CastlingRight cr) const;
 
@@ -157,8 +157,6 @@ public:
   Score psq_score() const;
   Value non_pawn_material(Color c) const;
   Value non_pawn_material() const;
-  Value pawn_material(Color c) const;
-  Value pawn_material() const;
 
   // Position consistency check, for debugging
   bool pos_is_ok() const;
@@ -262,11 +260,11 @@ inline Square Position::ep_square() const {
   return st->epSquare;
 }
 
-inline int Position::can_castle(CastlingRight cr) const {
+inline bool Position::can_castle(CastlingRight cr) const {
   return st->castlingRights & cr;
 }
 
-inline int Position::can_castle(Color c) const {
+inline int Position::castling_rights(Color c) const {
   return st->castlingRights & ((WHITE_OO | WHITE_OOO) << (2 * c));
 }
 
@@ -342,14 +340,6 @@ inline Value Position::non_pawn_material(Color c) const {
 
 inline Value Position::non_pawn_material() const {
   return st->nonPawnMaterial[WHITE] + st->nonPawnMaterial[BLACK];
-}
-
-inline Value Position::pawn_material() const {
-	return pawn_material(WHITE) + pawn_material(BLACK);
-}
-
-inline Value Position::pawn_material(Color c) const {
-	return PawnValueEg * pieceCount[make_piece(c, PAWN)];
 }
 
 inline int Position::game_ply() const {

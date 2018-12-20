@@ -127,7 +127,7 @@ const string engine_info(bool to_uci) {
   string month, day, year;
   stringstream ss, date(__DATE__); // From compiler, format is "Sep 21 2008"
 
-  ss << "SugaR RC2 " << Version << setfill('0');
+  ss << "SugaR RC3 " << Version << setfill('0');
 
   if (Version.empty())
   {
@@ -135,7 +135,7 @@ const string engine_info(bool to_uci) {
       ss << setw(2) << day << setw(2) << (1 + months.find(month) / 4) << year.substr(2);
   }
 
-  ss << (Is64Bit ? " 64" : " 32")
+  ss << (Is64Bit ? " 64" : "")
      << (HasPext ? " BMI2" : (HasPopCnt ? " POPCNT" : ""))
      << (to_uci  ? "\nid author ": " by ")
      << "Stockfish Team, Marco Zerbinati, Sergey Aleksandrovitch Kozlov";

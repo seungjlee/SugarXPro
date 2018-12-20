@@ -24,9 +24,8 @@
 #include <cstring>   // For std::memset
 #include <iostream>
 #include <sstream>
-#include <random>
 
-#include "book.h"
+#include "polybook.h"
 #include "evaluate.h"
 #include "misc.h"
 #include "movegen.h"
@@ -218,7 +217,6 @@ void MainThread::search() {
       return;
   }
 
-  static PolyglotBook book; // Defined static to initialize the PRNG only once
   Color us = rootPos.side_to_move();
   Time.init(Limits, us, rootPos.game_ply());
 //Hash			  
@@ -246,25 +244,26 @@ void MainThread::search() {
   }
   else
   {
-      if (bool(Options["OwnBook"]) && !Limits.infinite && !Limits.mate)
+      Move bookMove = MOVE_NONE;
+
+      if (!Limits.infinite && !Limits.mate)
+          bookMove = polybook.probe(rootPos);
+
+      if (bookMove && std::count(rootMoves.begin(), rootMoves.end(), bookMove))
       {
-          Move bookMove = book.probe(rootPos, Options["Book File"], Options["Best Book Move"]);
-
-          if (bookMove && std::count(rootMoves.begin(), rootMoves.end(), bookMove))
-          {
-              std::swap(rootMoves[0], *std::find(rootMoves.begin(), rootMoves.end(), bookMove));
-              goto finalize;
-          }
+          for (Thread* th : Threads)
+              std::swap(th->rootMoves[0], *std::find(th->rootMoves.begin(), th->rootMoves.end(), bookMove));
       }
-	  
-      for (Thread* th : Threads)
-          if (th != this)
-              th->start_searching();
+      else
+      {
+          for (Thread* th : Threads)
+              if (th != this)
+                  th->start_searching();
 
-      Thread::search(); // Let's start searching!
+          Thread::search(); // Let's start searching!
+      }
   }
 
-finalize:
   // When we reach the maximum depth, we can arrive here without a raise of
   // Threads.stop. However, if we are pondering or in an infinite search,
   // the UCI protocol states that we shouldn't print the best move before the
@@ -291,12 +290,12 @@ finalize:
 
   // Check if there are threads with a better score than main thread
   Thread* bestThread = this;
-  if (    int(Options["MultiPV"]) == 1
+  if (    Options["MultiPV"] == 1
       && !Limits.depth
-      && !Skill(int(Options["Skill Level"])).enabled()
+      && !Skill(Options["Skill Level"]).enabled()
       &&  rootMoves[0].pv[0] != MOVE_NONE)
   {
-      std::map<Move, int> votes;
+      std::map<Move, int64_t> votes;
       Value minScore = this->rootMoves[0].score;
 
       // Find out minimum score and reset votes for moves which can be voted
@@ -307,12 +306,13 @@ finalize:
       }
 
       // Vote according to score and depth
+      auto square = [](int64_t x) { return x * x; };
       for (Thread* th : Threads)
-          votes[th->rootMoves[0].pv[0]] +=  int(th->rootMoves[0].score - minScore)
-                                          + int(th->completedDepth);
+          votes[th->rootMoves[0].pv[0]] += 200 + (square(th->rootMoves[0].score - minScore + 1)
+                                                  * int64_t(th->completedDepth));
 
       // Select best thread
-      int bestVote = votes[this->rootMoves[0].pv[0]];
+      int64_t bestVote = votes[this->rootMoves[0].pv[0]];
       for (Thread* th : Threads)
       {
           if (votes[th->rootMoves[0].pv[0]] > bestVote)
@@ -366,8 +366,7 @@ void Thread::search() {
       mainThread->bestMoveChanges = 0, failedLow = false;
 
   size_t multiPV = Options["MultiPV"];
-  int local_int = Options["Skill Level"];
-  Skill skill(local_int);
+  Skill skill(Options["Skill Level"]);
 
   // When playing with strength handicap enable MultiPV search that we will
   // use behind the scenes to retrieve a set of possible moves.
@@ -379,11 +378,11 @@ void Thread::search() {
   int ct = int(Options["Contempt"]) * PawnValueEg / 100; // From centipawns
 
   // In analysis mode, adjust contempt in accordance with user preference
-  if (Limits.infinite || bool(Options["UCI_AnalyseMode"]))
-      ct =  Options["Analysis_CT"] == "Off"  ? 0
-          : Options["Analysis_CT"] == "Both" ? ct
-          : Options["Analysis_CT"] == "White" && us == BLACK ? -ct
-          : Options["Analysis_CT"] == "Black" && us == WHITE ? -ct
+  if (Limits.infinite || Options["UCI_AnalyseMode"])
+      ct =  Options["Analysis Contempt"] == "Off"  ? 0
+          : Options["Analysis Contempt"] == "Both" ? ct
+          : Options["Analysis Contempt"] == "White" && us == BLACK ? -ct
+          : Options["Analysis Contempt"] == "Black" && us == WHITE ? -ct
           : ct;
 
   // In evaluate.cpp the evaluation is from the white point of view
@@ -875,8 +874,8 @@ namespace {
         &&  depth >= 5 * ONE_PLY
         &&  abs(beta) < VALUE_MATE_IN_MAX_PLY)
     {
-        Value rbeta = std::min(beta + 216 - 48 * improving, VALUE_INFINITE);
-        MovePicker mp(pos, ttMove, rbeta - ss->staticEval, &thisThread->captureHistory);
+        Value raisedBeta = std::min(beta + 216 - 48 * improving, VALUE_INFINITE);
+        MovePicker mp(pos, ttMove, raisedBeta - ss->staticEval, &thisThread->captureHistory);
         int probCutCount = 0;
 
         while (  (move = mp.next_move()) != MOVE_NONE
@@ -893,15 +892,15 @@ namespace {
                 pos.do_move(move, st);
 
                 // Perform a preliminary qsearch to verify that the move holds
-                value = -qsearch<NonPV>(pos, ss+1, -rbeta, -rbeta+1);
+                value = -qsearch<NonPV>(pos, ss+1, -raisedBeta, -raisedBeta+1);
 
                 // If the qsearch held perform the regular search
-                if (value >= rbeta)
-                    value = -search<NonPV>(pos, ss+1, -rbeta, -rbeta+1, depth - 4 * ONE_PLY, !cutNode);
+                if (value >= raisedBeta)
+                    value = -search<NonPV>(pos, ss+1, -raisedBeta, -raisedBeta+1, depth - 4 * ONE_PLY, !cutNode);
 
                 pos.undo_move(move);
 
-                if (value >= rbeta)
+                if (value >= raisedBeta)
                     return value;
             }
     }
@@ -977,18 +976,18 @@ moves_loop: // When in check, search starts from here
       if (    depth >= 8 * ONE_PLY
           &&  move == ttMove
           && !rootNode
-          && !excludedMove // Recursive singular search is not allowed
+          && !excludedMove // Avoid recursive singular search
           &&  ttValue != VALUE_NONE
           && (tte->bound() & BOUND_LOWER)
           &&  tte->depth() >= depth - 3 * ONE_PLY
           &&  pos.legal(move))
       {
-          Value rBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
+          Value reducedBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
           ss->excludedMove = move;
-          value = search<NonPV>(pos, ss, rBeta - 1, rBeta, depth / 2, cutNode);
+          value = search<NonPV>(pos, ss, reducedBeta - 1, reducedBeta, depth / 2, cutNode);
           ss->excludedMove = MOVE_NONE;
 
-          if (value < rBeta)
+          if (value < reducedBeta)
               extension = ONE_PLY;
       }
       else if (    givesCheck // Check extension (~2 Elo)
@@ -1235,9 +1234,9 @@ moves_loop: // When in check, search starts from here
         update_capture_stats(pos, bestMove, capturesSearched, captureCount, stat_bonus(depth + ONE_PLY));
 
         // Extra penalty for a quiet TT or main killer move in previous ply when it gets refuted
-		if (   (ss-1)->moveCount == 1
-		    || ((ss-1)->currentMove == (ss-1)->killers[0] && (ss-1)->killers[0]))
-		    if (!pos.captured_piece())
+        if (   (ss-1)->moveCount == 1
+            || ((ss-1)->currentMove == (ss-1)->killers[0] && (ss-1)->killers[0]))
+            if (!pos.captured_piece())
                 update_continuation_histories(ss-1, pos.piece_on(prevSq), prevSq, -stat_bonus(depth + ONE_PLY));
 
     }
