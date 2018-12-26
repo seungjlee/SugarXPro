@@ -114,18 +114,18 @@ void TranspositionTable::clear() {
 
   std::vector<std::thread> threads;
 
-  for (size_t idx = 0; idx < Options["Threads"]; ++idx)
+  for (size_t idx = 0; idx < size_t(Options["Threads"]); ++idx)
   {
       threads.emplace_back([this, idx]() {
 
           // Thread binding gives faster search on systems with a first-touch policy
-          if (Options["Threads"] > 8)
+          if (int(Options["Threads"]) >= 8)
               WinProcGroup::bindThisThread(idx);
 
           // Each thread will zero its part of the hash table
-          const size_t stride = clusterCount / Options["Threads"],
+          const size_t stride = clusterCount / size_t(Options["Threads"]),
                        start  = stride * idx,
-                       len    = idx != Options["Threads"] - 1 ?
+                       len    = idx != size_t(Options["Threads"]) - 1 ?
                                 stride : clusterCount - start;
 
           std::memset(&table[start], 0, len * sizeof(Cluster));
@@ -487,7 +487,7 @@ TTEntry* TranspositionTable::probe(const Key key, bool& found) const {
   TTEntry* const tte = first_entry(key);
   const uint16_t key16 = key >> 48;  // Use the high 16 bits as key inside the cluster
 
-  for (int i = 0; i < ClusterSize; ++i)
+  for (size_t i = 0; i < ClusterSize; ++i)
       if (!tte[i].key16 || tte[i].key16 == key16)
       {
           tte[i].genBound8 = uint8_t(generation8 | tte[i].bound()); // Refresh
@@ -497,7 +497,7 @@ TTEntry* TranspositionTable::probe(const Key key, bool& found) const {
 
   // Find an entry to be replaced according to the replacement strategy
   TTEntry* replace = tte;
-  for (int i = 1; i < ClusterSize; ++i)
+  for (size_t i = 1; i < ClusterSize; ++i)
       // Due to our packed storage format for generation and its cyclic
       // nature we add 259 (256 is the modulus plus 3 to keep the lowest
       // two bound bits from affecting the result) to calculate the entry
@@ -516,8 +516,8 @@ TTEntry* TranspositionTable::probe(const Key key, bool& found) const {
 int TranspositionTable::hashfull() const {
 
   int cnt = 0;
-  for (int i = 0; i < 1000 / ClusterSize; ++i)
-      for (int j = 0; j < ClusterSize; ++j)
+  for (size_t i = 0; i < 1000 / ClusterSize; ++i)
+      for (size_t j = 0; j < ClusterSize; ++j)
           cnt += (table[i].entry[j].genBound8 & 0xFC) == generation8;
 
   return cnt * 1000 / (ClusterSize * (1000 / ClusterSize));
