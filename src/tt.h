@@ -105,6 +105,7 @@ private:
   Cluster* table;
   void* mem;
   uint8_t generation8; // Size must be not bigger than TTEntry::genBound8
+  size_t Size = 0;
 };
 
 extern TranspositionTable TT;
