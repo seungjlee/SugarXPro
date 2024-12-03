@@ -524,11 +524,15 @@ void Thread::search() {
       }
 
       // Have we found a "mate in x"?
-      if (   Limits.mate
+      if (Limits.mate
           && bestValue >= VALUE_MATE_IN_MAX_PLY
           && VALUE_MATE - bestValue <= 2 * Limits.mate)
           Threads.stop = true;
 
+      if (Limits.movetime > 0 && Time.elapsed() >= Limits.movetime)
+          Threads.stop = true;
+
+#if 0
       if (!mainThread)
           continue;
 
@@ -566,10 +570,13 @@ void Thread::search() {
                       Threads.stop = true;
               }
           }
+#endif
   }
 
   if (!mainThread)
       return;
+
+  sync_cout << "Time Elapsed: " << Time.elapsed() << sync_endl;
 
   mainThread->previousTimeReduction = timeReduction;
 

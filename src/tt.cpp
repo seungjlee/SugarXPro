@@ -91,6 +91,7 @@ void TranspositionTable::resize(size_t mbSize) {
   Threads.main()->wait_for_search_finished();
 
 	if (mbSize > Size) {
+    sync_cout << "TranspositionTable::resize: " << mbSize << sync_endl;
 		Size = mbSize;
 		clusterCount = mbSize * 1024 * 1024 / sizeof(Cluster);
 

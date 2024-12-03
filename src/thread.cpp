@@ -160,7 +160,7 @@ void ThreadPool::clear() {
 void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
                                 const Search::LimitsType& limits, bool ponderMode) {
 
-  main()->wait_for_search_finished();
+  //main()->wait_for_search_finished();
 
   stopOnPonderhit = stop = false;
   ponder = ponderMode;
@@ -189,7 +189,8 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   // is shared by threads but is accessed in read-only mode.
   StateInfo tmp = setupStates->back();
 
-  for (Thread* th : *this)
+  Thread* th = main();
+  //for (Thread* th : *this)
   {
       th->nodes = th->tbHits = th->nmpMinPly = 0;
       th->rootDepth = th->completedDepth = DEPTH_ZERO;
@@ -198,6 +199,7 @@ void ThreadPool::start_thinking(Position& pos, StateListPtr& states,
   }
 
   setupStates->back() = tmp;
+  th->search();
 
-  main()->start_searching();
+  //main()->start_searching();
 }
